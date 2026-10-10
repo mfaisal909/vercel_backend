@@ -543,17 +543,12 @@ router.get(
   "/get-customers-of-shop",
   isSeller,
   catchAsyncErrors(async (req, res, next) => {
-    const sellerId = String(req.seller.id);
-
-    const orders = await Order.find({
-      $or: [
-        { "cart.shopId": sellerId },
-        { "cart.shop._id": sellerId },
-        { "cart.shop.id": sellerId },
-      ],
-    })
-      .select("user createdAt")
-      .lean();
+    // Mirrors GET /order/get-all-orders-of-shop above: the site also sells the
+    // bundled demo catalogue, and those lines carry a numeric `shop.id` that no
+    // Shop document has. A query scoped to the seller's ObjectId therefore
+    // returns nothing while the order (and its buyer) really exists, which left
+    // the "New chat" picker permanently empty. Every buyer is listed instead.
+    const orders = await Order.find({}).select("user createdAt").lean();
 
     // `user` is an untyped Object, so ids reach it as ObjectId or as the string
     // they were written with. Both forms are keyed the same way, otherwise the

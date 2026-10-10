@@ -328,8 +328,20 @@ router.get(
 
     const shop = await Shop.findById(id);
 
+    // An old conversation outlives the shop it points at, and the inbox still
+    // renders that thread by name and avatar. A missing shop therefore resolves
+    // to a neutral placeholder instead of a 404 that only produces a failed
+    // request the UI already knows how to display. Mirrors `/user/user-info/:id`.
     if (!shop) {
-      return next(new ErrorHandler("Shop not found", 404));
+      return res.status(200).json({
+        success: true,
+        deleted: true,
+        shop: {
+          _id: id,
+          name: "Deleted shop",
+          avatar: null,
+        },
+      });
     }
 
     res.status(200).json({

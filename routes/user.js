@@ -273,8 +273,20 @@ router.get(
 
     const user = await User.findById(req.params.id).select("name avatar");
 
+    // An old conversation is kept even after its buyer account is removed, and
+    // the inbox still renders that thread (name + avatar). Answering 404 there
+    // only produced a failed request the UI already knows how to display, so a
+    // missing account resolves to a neutral placeholder instead.
     if (!user) {
-      return next(new ErrorHandler("User not found", 404));
+      return res.status(200).json({
+        success: true,
+        deleted: true,
+        user: {
+          _id: req.params.id,
+          name: "Deleted user",
+          avatar: null,
+        },
+      });
     }
 
     res.status(200).json({

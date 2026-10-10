@@ -79,8 +79,13 @@ const initSocketServer = (httpServer, { corsOrigin } = {}) => {
 
       // conversationId travels with the event because a tab can hold several
       // threads; without it the receiver cannot tell which one this belongs to.
+      // receiverId rides along for the same reason in reverse: one browser can
+      // hold both a seller and a buyer session on a single socket, and the
+      // receiving tab needs to know whether this message was addressed to the
+      // shop (toast + unread badge) or to the shopper account.
       io.to(receiver.socketId).emit("getMessage", {
         senderId,
+        receiverId,
         text,
         images,
         conversationId,

@@ -9,6 +9,7 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
     path: path.join(__dirname, "config", ".env"),
   });
 }
+const _dirname = path.resolve();
 
 const app = express();
 
@@ -67,6 +68,17 @@ app.use("/api/v2/event", eventRouter);
 app.use("/api/v2/coupon", couponRouter);
 app.use("/api/v2/payment", paymentRouter);
 app.use("/api/v2/order", orderRouter);
+
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+
+app.get("/{*splat}", (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "../frontend/dist/index.html")
+  );
+});
+
+
 // error middleware
 const errorMiddleware = require("./middleware/error");
 app.use(errorMiddleware);

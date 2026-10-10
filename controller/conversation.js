@@ -1,5 +1,6 @@
 const Conversation = require("../model/conversation");
 const User = require("../model/user");
+const Shop = require("../model/shop");
 const mongoose = require("mongoose");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
@@ -16,6 +17,37 @@ const findPairConversation = (userId, sellerId) =>
   Conversation.findOne({
     members: { $all: [String(userId), String(sellerId)] },
   }).sort({ updatedAt: -1 });
+
+// The bundled demo catalogue ships its own numeric `shop.id`s, which name no
+// account at all, so a buyer opening one of those products has no seller id
+// that could carry a conversation. The site's activated sellers are real
+// accounts, so the oldest one stands in as the shop behind those listings —
+// without it "Send Message" would have nobody to reach. Only a Mongo id can be
+// a conversation member, so nothing is returned until a real shop exists.
+router.get(
+  "/default-seller",
+  catchAsyncErrors(async (req, res, next) => {
+    // `$ne: false` rather than `true` so shops created before the activation
+    // flag existed still count as messageable.
+    const shop = await Shop.findOne({
+      role: "Seller",
+      isActivated: { $ne: false },
+    })
+      .sort({ createdAt: 1 })
+      .select("_id");
+
+    if (!shop) {
+      return next(
+        new ErrorHandler("No shop account is available to message yet", 404)
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      sellerId: String(shop._id),
+    });
+  })
+);
 
 // create a new conversation
 router.post(
@@ -55,7 +87,9 @@ router.post(
         });
       }
     } catch (error) {
-      return next(new ErrorHandler(error.response.message), 500);
+      return next(
+        new ErrorHandler(error.message || "Could not create the conversation", 500)
+      );
     }
   })
 );
