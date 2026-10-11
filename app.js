@@ -17,6 +17,12 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
 
 const app = express();
 
+
+app.get("/favicon.ico", (req, res) => {
+  res.status(204).end();
+});
+
+
 // Frontend URL
 const frontendUrl =
   process.env.FRONTEND_URL || "http://localhost:5173";
