@@ -5,15 +5,17 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
-// Project directory
-const _dirname = path.resolve();
-
-// Load local environment variables
+// Load local environment variables before anything reads process.env, and only
+// outside production. On Vercel (NODE_ENV=PRODUCTION) the values come from the
+// platform environment instead. __dirname keeps the path correct whether the
+// backend is started from the backend/ folder or from the repo root.
 if (process.env.NODE_ENV !== "PRODUCTION") {
   require("dotenv").config({
-    path: path.join(_dirname, "config", ".env"),
+    path: path.join(__dirname, "config", ".env"),
   });
 }
+
+const connectDatabase = require("./db/Database");
 
 const app = express();
 
@@ -23,34 +25,42 @@ app.get("/favicon.ico", (req, res) => {
 });
 
 
-// Frontend URL
-const frontendUrl =
-  process.env.FRONTEND_URL || "http://localhost:5173";
+// Allowed frontend origins. The exact deployed frontend is always allowed so a
+// fresh Vercel backend deployment works even before FRONTEND_URL is added to
+// the backend project, and FRONTEND_URL can list extra origins (comma
+// separated) such as http://localhost:5173 during development.
+const allowedOrigins = new Set();
 
-// Allowed frontend origins
-const allowedOrigins = new Set([
-  frontendUrl.replace(/\/$/, ""),
-  frontendUrl
-    .replace(/^http:/, "https:")
-    .replace(/\/$/, ""),
-]);
+const addAllowedOrigin = (value) => {
+  const trimmed = String(value || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return;
+  allowedOrigins.add(trimmed);
+  allowedOrigins.add(trimmed.replace(/^http:/, "https:"));
+};
 
-// CORS configuration
+addAllowedOrigin("https://frontend-project-blush-delta.vercel.app");
+(process.env.FRONTEND_URL || "")
+  .split(",")
+  .forEach(addAllowedOrigin);
+
+app.getFrontendOrigins = () => Array.from(allowedOrigins);
+
+// CORS runs before every route, so preflight (OPTIONS) and credentialed
+// requests coming from the frontend receive the correct headers. Requests from
+// origins not listed above are refused by omitting the CORS headers, which the
+// browser enforces; the server never hands out Access-Control-Allow-Origin: *.
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.has(origin.replace(/\/$/, ""))
-      ) {
+      if (!origin || allowedOrigins.has(origin.replace(/\/+$/, ""))) {
         return callback(null, true);
       }
 
-      return callback(
-        new Error(`Origin ${origin} is not allowed by CORS`)
-      );
+      return callback(null, false);
     },
     credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
 
@@ -67,7 +77,7 @@ app.use(
 // Static uploads
 app.use(
   "/uploads",
-  express.static(path.join(_dirname, "../uploads"))
+  express.static(path.join(__dirname, "../uploads"))
 );
 
 // Import routes
@@ -115,6 +125,12 @@ app.use((req, res) => {
 // Error middleware
 const errorMiddleware = require("./middleware/error");
 app.use(errorMiddleware);
+
+// Connect MongoDB. app.js is the serverless entry Vercel runs (see
+// backend/vercel.json), while server.js is only used for local development, so
+// the connection must live here or every query on Vercel would sit in the
+// buffer until Mongoose reports "buffering timed out after 10000ms".
+connectDatabase();
 
 // Export Express app
 module.exports = app;

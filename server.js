@@ -1,7 +1,5 @@
 const app = require("./app");
-const connectDatabase = require("./db/Database");
 const initSocketServer = require("./socket");
-const path = require("path");
 
 process.on("uncaughtException", (err) => {
   console.log(`Error: ${err.message}`);
@@ -9,13 +7,8 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-if (process.env.NODE_ENV !== "PRODUCTION") {
-  require("dotenv").config({
-    path: path.join(__dirname, "config", ".env"),
-  });
-}
-
-connectDatabase();
+// app.js loads the local environment (backend/config/.env) and connects
+// MongoDB, so this process only has to listen and serve socket.io.
 
 const server = app.listen(process.env.PORT, () => {
   console.log(`Server is running on port ${process.env.PORT}`);
@@ -23,11 +16,9 @@ const server = app.listen(process.env.PORT, () => {
 
 // The seller inbox used to talk to a separate socket.io host that no longer
 // resolves, so realtime messaging is served by this process instead. The
-// origins must mirror the two accepted by the Express CORS config in app.js.
-const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-
+// origins mirror the ones accepted by the Express CORS config in app.js.
 initSocketServer(server, {
-  corsOrigin: [frontendUrl, frontendUrl.replace(/^http:/, "https:")],
+  corsOrigin: app.getFrontendOrigins ? app.getFrontendOrigins() : [],
 });
 
 process.on("unhandledRejection", (err) => {
