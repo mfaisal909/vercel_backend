@@ -1,48 +1,70 @@
+
 const express = require("express");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
+// Project directory
+const _dirname = path.resolve();
+
+// Load local environment variables
 if (process.env.NODE_ENV !== "PRODUCTION") {
   require("dotenv").config({
-    path: path.join(__dirname, "config", ".env"),
+    path: path.join(_dirname, "config", ".env"),
   });
 }
-const _dirname = path.resolve();
 
 const app = express();
 
-const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+// Frontend URL
+const frontendUrl =
+  process.env.FRONTEND_URL || "http://localhost:5173";
 
-// Accept both schemes: the Vite dev server switches to https://localhost:5173
-// when VITE_DEV_HTTPS=true (required for Stripe pk_live_ keys).
+// Allowed frontend origins
 const allowedOrigins = new Set([
-  frontendUrl,
-  frontendUrl.replace(/^http:/, "https:"),
+  frontendUrl.replace(/\/$/, ""),
+  frontendUrl
+    .replace(/^http:/, "https:")
+    .replace(/\/$/, ""),
 ]);
 
+// CORS configuration
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.has(origin.replace(/\/$/, ""))
+      ) {
         return callback(null, true);
       }
 
-      return callback(new Error(`Origin ${origin} is not allowed by CORS`));
+      return callback(
+        new Error(`Origin ${origin} is not allowed by CORS`)
+      );
     },
     credentials: true,
   })
 );
 
-// middlewares
+// Middlewares
 app.use(express.json({ limit: "20mb" }));
 app.use(cookieParser());
+app.use(
+  bodyParser.urlencoded({
+    extended: true,
+    limit: "20mb",
+  })
+);
 
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-app.use(bodyParser.urlencoded({ extended: true, limit: "20mb" }));
+// Static uploads
+app.use(
+  "/uploads",
+  express.static(path.join(_dirname, "../uploads"))
+);
 
-// routes
+// Import routes
 const userRouter = require("./routes/user");
 const cartRouter = require("./routes/cart");
 const shopRouter = require("./routes/shop");
@@ -55,10 +77,9 @@ const conversationRouter = require("./controller/conversation");
 const messageRouter = require("./controller/messages");
 const shopReviewRouter = require("./controller/shopReview");
 
+// API routes
 app.use("/api/v2/conversation", conversationRouter);
-// Never mounted, so every GET /api/v2/message/... answered 404.
 app.use("/api/v2/message", messageRouter);
-// Ratings a buyer leaves on a shop from inside the chat inbox.
 app.use("/api/v2/shop-review", shopReviewRouter);
 app.use("/api/v2/user", userRouter);
 app.use("/api/v2/cart", cartRouter);
@@ -69,18 +90,25 @@ app.use("/api/v2/coupon", couponRouter);
 app.use("/api/v2/payment", paymentRouter);
 app.use("/api/v2/order", orderRouter);
 
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
-
-
-app.get("/{*splat}", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "../frontend/dist/index.html")
-  );
+// Backend home route
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Backend API is running",
+  });
 });
 
+// Handle unknown routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
 
-// error middleware
+// Error middleware
 const errorMiddleware = require("./middleware/error");
 app.use(errorMiddleware);
 
+// Export Express app
 module.exports = app;
